@@ -3,6 +3,7 @@
 # if you just dismiss it, your ip will be banned
 import re
 import json
+import numpy as np
 
 import scrapy
 from scrapy.crawler import CrawlerProcess
@@ -54,17 +55,43 @@ class MegaboxSpider(scrapy.Spider):
 
     def getSeats(self, response):
         seatList = json.loads( response.body )['seatList']
-        coordinates = list(map(
-            lambda seat: {
-                'reserved': seat['seatStatus'] == '50',
-                'x': seat['seatNo'],
-                'y': seat['seatRow']
-            },
-            seatList
-        ))
-        yield {
-            "movie": coordinates
-        }
+        coordinates = np.array(list(map(
+            lambda seat: [
+                int(seat['seatNo']),
+                int(seat['seatRow'])
+            ],
+            filter(
+                lambda seat: seat['seatStatus'] == '50',
+                seatList
+            )
+        )))
+        yield self.draw(coordinates)
+
+    def writeDB(self, coordinates):
+        pass
+
+    def draw(self, coordinates):
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        from matplotlib import cm
+
+        x = coordinates[:, 0]
+        y = np.arange(-5, 5, 1)
+        X, Y = np.meshgrid(x, y)
+        Z = X*0
+
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')              # 3d axes instance
+        surf = ax.plot_surface(X, Y, Z,           # data values (2D Arryas)
+                               rstride=2,                    # row step size
+                               cstride=2,                   # column step size
+                               cmap=cm.RdPu,        # colour map
+                               linewidth=10,                # wireframe line width
+                               antialiased=True)
+
+        ax.view_init(elev=30,azim=70)                # elevation & angle
+        ax.dist=8                                                  # distance from the plot
+        plt.show()
 
 process = CrawlerProcess()
 process.crawl(MegaboxSpider)
