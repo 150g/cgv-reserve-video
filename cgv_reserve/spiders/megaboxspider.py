@@ -9,6 +9,7 @@ import db
 import scrapy
 from scrapy.crawler import CrawlerProcess
 
+# get from server, set to db
 class MegaboxSpider(scrapy.Spider):
     type         = 1
     name         = 'megaboxspider'
@@ -18,75 +19,54 @@ class MegaboxSpider(scrapy.Spider):
 
     def start_requests(self):
         self.db = db.DB()
+        """## write Theater to DB
         yield scrapy.Request(url=self.theaterUrl, callback=self.setTheater)
-        #yield scrapy.Request(url=self.theaterUrl, callback=self.getTimetable)
-        #yield scrapy.Request(url=self.theaterUrl, callback=self.getTheater)
+        #"""##
+
+        #"""## write Timetable to DB
+        theaters = self.db.getTheater(self.type)
+        for t in theaters:
+            yield scrapy.Request(
+                url='%s?%s=%s' % ( self.timetableUrl, 'cinema', t[0] ),
+                callback=self.setTimetable
+            )
+        #"""##
+
+        """## write Timetable to DB
+        timetables = self.db.getTimetable(self.type)
+        for t in timetables:
+            yield scrapy.Request(
+
+            )
+        #"""##
+
+        #yield self.getSeats()
+
+    def getTheater(self):
+        return scrapy.Request(url=self.theaterUrl, callback=self.setTheater)
 
     def setTheater(self, response):
         theaters = response.css('.wrap a')
         self.db.setTheater(theaters, self.type)
 
-        """
-        conn = sqlite3.connect("test.db")
-        cur = conn.cursor()
-        sql = "insert into Theater values(:name, :code, :type)"
-
-        theater = list(map(
-            lambda t: cur.execute(sql, {
-                'name': t.css('::text').get(),
-                'code': t.attrib['onclick'].split('cinema=')[1].split('\'')[0],
-                'type': self.type
-            }),
-            response.css('.wrap a')
-        ))
-        conn.commit()
-        conn.close()
-        """
-        """
-        #for t in theater:
-        yield scrapy.Request(
-            url='%s?%s=%s' % ( self.timetableUrl, 'cinema', t['code'] ),
-            callback=self.getTimetable
+    def setTimetable(self, response):
+        timetables = map(
+            lambda t: re.findall( r"'(.*)'", t.attrib['onclick'] ),
+            response.css('.cinema_time a')
         )
-        break
-        """
+        timetables = list(map(
+        lambda f: {
+            'cinemaCode': f[2],
+            'screenCode': f[3],
+            'playDate': f[5],
+            'showSeq': f[7],
+            'showMovieCode': f[0]
+        }, timetables
+        ))
+        self.db.setTimetable(timetables, self.type)
 
-    def getTimetable(self, response):
-        conn = sqlite3.connect("test.db")
-        cur = conn.cursor()
-        sql = "select code from theater where type is 1"
-        cur.execute(sql);
-        codes = cur.fetchall()
-        for code in codes:
-            yield scrapy.Request(
-                url='%s?%s=%s' % ( self.timetableUrl, 'cinema', code ),
-                callback=self.getTimetable
-            )
-            break
-        conn.close()
-        """
-        for time in response.css('.cinema_time a'):
-            formdata = re.findall( r"'(.*)'", time.attrib['onclick'] )
-            formdata = {
-                '_command': 'Booking.getBookingSeatInfo',
-                'siteCode': '36',
-                'cinemaCode': formdata[2],
-                'screenCode': formdata[3],
-                'playDate': formdata[5],
-                'showSeq': formdata[7],
-                'showMovieCode': formdata[0],
-                'korEngGubun': '1'
-            }
-            yield scrapy.FormRequest(
-                url=self.seatListUrl,
-                formdata=formdata,
-                meta=formdata,
-                callback=self.getSeats
-            )
-            break
-        """
-
-    def getSeats(self, response):
+    def getSeats(self):
+        times = self.db.getTimetable()
         seatList = json.loads( response.body )['seatList']
         coordinates = np.array(list(map(
             lambda seat: [
