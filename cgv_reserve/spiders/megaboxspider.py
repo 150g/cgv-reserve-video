@@ -2,9 +2,8 @@
 # need to make interval
 # if you just dismiss it, your ip will be banned
 import re
-import json
-import numpy as np
 import db
+import json
 
 import scrapy
 from scrapy.crawler import CrawlerProcess
@@ -18,13 +17,13 @@ class MegaboxSpider(scrapy.Spider):
     seatListUrl  = 'http://www.megabox.co.kr/DataProvider'
 
     def start_requests(self):
-        self.db = db.DB()
+        self.db = db.DB(self.type)
         """## write Theater to DB
         yield scrapy.Request(url=self.theaterUrl, callback=self.setTheater)
         #"""##
 
-        #"""## write Timetable to DB
-        theaters = self.db.getTheater(self.type)
+        """## write Timetable to DB
+        theaters = self.db.getTheater()
         for t in theaters:
             yield scrapy.Request(
                 url='%s?%s=%s' % ( self.timetableUrl, 'cinema', t[0] ),
@@ -32,22 +31,30 @@ class MegaboxSpider(scrapy.Spider):
             )
         #"""##
 
-        """## write Timetable to DB
-        timetables = self.db.getTimetable(self.type)
+        #"""## write Seats to DB
+        timetables = self.db.getTimetable()
+        formdata = {
+            '_command': 'Booking.getBookingSeatInfo',
+            'siteCode': '36',
+            'korEngGubun': '1'
+        }
         for t in timetables:
-            yield scrapy.Request(
-
+            formdata['cinemaCode'] = t[0]
+            formdata['screenCode'] = t[1]
+            formdata['playDate'] = t[2]
+            formdata['showSeq'] = t[3]
+            formdata['showMovieCode'] = t[4]
+            yield scrapy.FormRequest(
+                url=self.seatListUrl,
+                formdata=formdata,
+                meta={'id': t[6]},
+                callback=self.setSeat
             )
         #"""##
 
-        #yield self.getSeats()
-
-    def getTheater(self):
-        return scrapy.Request(url=self.theaterUrl, callback=self.setTheater)
-
     def setTheater(self, response):
         theaters = response.css('.wrap a')
-        self.db.setTheater(theaters, self.type)
+        self.db.setTheater(theaters)
 
     def setTimetable(self, response):
         timetables = map(
@@ -63,46 +70,22 @@ class MegaboxSpider(scrapy.Spider):
             'showMovieCode': f[0]
         }, timetables
         ))
-        self.db.setTimetable(timetables, self.type)
+        self.db.setTimetable(timetables)
 
-    def getSeats(self):
-        times = self.db.getTimetable()
+    def setSeat(self, response):
         seatList = json.loads( response.body )['seatList']
-        coordinates = np.array(list(map(
-            lambda seat: [
-                int(seat['seatNo']),
-                int(seat['seatRow'])
-            ],
+        timetableId = response.meta['id']
+        coordinates = list(map(
+            lambda seat: {
+                'x': int(seat['seatNo']),
+                'y': ord(seat['seatGroup'])-64
+            },
             filter(
                 lambda seat: seat['seatStatus'] == '50',
                 seatList
             )
-        )))
-        #yield self.draw(coordinates)
-        yield self.writeDB(coordinates)
-
-    def draw(self, coordinates):
-        import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
-        from matplotlib import cm
-
-        x = coordinates[:, 0]
-        y = np.arange(-5, 5, 1)
-        X, Y = np.meshgrid(x, y)
-        Z = X*0
-
-        fig = plt.figure()
-        ax = fig.gca(projection='3d')              # 3d axes instance
-        surf = ax.plot_surface(X, Y, Z,           # data values (2D Arryas)
-                               rstride=2,                    # row step size
-                               cstride=2,                   # column step size
-                               cmap=cm.RdPu,        # colour map
-                               linewidth=10,                # wireframe line width
-                               antialiased=True)
-
-        ax.view_init(elev=30,azim=70)                # elevation & angle
-        ax.dist=8                                                  # distance from the plot
-        plt.show()
+        ))
+        self.db.setSeat(timetableId, coordinates)
 
 process = CrawlerProcess()
 process.crawl(MegaboxSpider)
