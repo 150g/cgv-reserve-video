@@ -3,6 +3,7 @@
 # if you just dismiss it, your ip will be banned
 import re
 import db
+import sys
 import json
 
 import scrapy
@@ -18,39 +19,62 @@ class MegaboxSpider(scrapy.Spider):
 
     def start_requests(self):
         self.db = db.DB(self.type)
-        """## write Theater to DB
-        yield scrapy.Request(url=self.theaterUrl, callback=self.setTheater)
+
+        #"""## write Theater to DB
+        if sys.argv[1] == '0':
+            yield scrapy.Request(url=self.theaterUrl, callback=self.setTheater)
         #"""##
 
-        """## write Timetable to DB
-        theaters = self.db.getTheater()
-        for t in theaters:
-            yield scrapy.Request(
-                url='%s?%s=%s' % ( self.timetableUrl, 'cinema', t[0] ),
-                callback=self.setTimetable
-            )
+        #"""## write Timetable to DB
+        elif sys.argv[1] == '1':
+            theaters = self.db.getTheater()
+            for t in theaters:
+                yield scrapy.Request(
+                    url='%s?%s=%s' % ( self.timetableUrl, 'cinema', t[0] ),
+                    callback=self.setTimetable
+                )
         #"""##
 
         #"""## write Seats to DB
-        timetables = self.db.getTimetable()
-        formdata = {
-            '_command': 'Booking.getBookingSeatInfo',
-            'siteCode': '36',
-            'korEngGubun': '1'
-        }
-        for t in timetables:
-            formdata['cinemaCode'] = t[0]
-            formdata['screenCode'] = t[1]
-            formdata['playDate'] = t[2]
-            formdata['showSeq'] = t[3]
-            formdata['showMovieCode'] = t[4]
-            yield scrapy.FormRequest(
-                url=self.seatListUrl,
-                formdata=formdata,
-                meta={'id': t[6]},
-                callback=self.setSeat
-            )
+        elif sys.argv[1] == '2':
+            timetables = self.db.getTimetable()
+            formdata = {
+                '_command': 'Booking.getBookingSeatInfo',
+                'siteCode': '36',
+                'korEngGubun': '1'
+            }
+            for t in timetables:
+                formdata['cinemaCode'] = t[0]
+                formdata['screenCode'] = t[1]
+                formdata['playDate'] = t[2]
+                formdata['showSeq'] = t[3]
+                formdata['showMovieCode'] = t[4]
+                yield scrapy.FormRequest(
+                    url=self.seatListUrl,
+                    formdata=formdata,
+                    meta={'id': t[6]},
+                    callback=self.setSeat
+                )
         #"""##
+
+        #"""## draw seat from DB
+        elif sys.argv[1] == '3':
+            import numpy as np
+            import matplotlib.pyplot as plt
+            from mpl_toolkits.mplot3d import Axes3D
+            from matplotlib import cm
+
+            coordinates = np.rot90(self.db.getSeat(), 3)
+            x,y,z = coordinates
+
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+
+            ax.plot_trisurf(x, y, z)
+            ax.set_xlabel('X Label')
+            ax.set_ylabel('Y Label')
+            ax.set_zlabel('Z Label')
+            plt.show()
 
     def setTheater(self, response):
         theaters = response.css('.wrap a')
@@ -87,6 +111,7 @@ class MegaboxSpider(scrapy.Spider):
         ))
         self.db.setSeat(timetableId, coordinates)
 
-process = CrawlerProcess()
-process.crawl(MegaboxSpider)
-process.start()
+if __name__ == '__main__':
+    process = CrawlerProcess()
+    process.crawl(MegaboxSpider)
+    process.start()

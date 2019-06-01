@@ -34,7 +34,7 @@ class DB:
 
     def getTimetable(self):
         conn, cur = self.open()
-        sql = "select * from Timetable where type=%d" % self.type
+        sql = "select * from Timetable where type=%d and playDate >= date('now')" % self.type
         cur.execute(sql)
         result = cur.fetchall()
         conn.close()
