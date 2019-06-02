@@ -4,7 +4,9 @@ class DB:
         self.type = type
 
     def open(self):
-        conn = sqlite3.connect('test.db')
+        import os
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test.db')
+        conn = sqlite3.connect(path)
         cur = conn.cursor()
         return conn, cur
 
@@ -18,17 +20,12 @@ class DB:
 
     def setTheater(self, theaters):
         conn, cur = self.open()
-        sql = 'delete from Theater'
-        cur.execute(sql)
-
         sql = "insert into Theater values(:name, :code, %s)" % self.type
-        list(map(
-        lambda t:
-        cur.execute(sql, {
-            'name': t.css('::text').get(),
-            'code': t.attrib['onclick'].split('cinema=')[1].split('\'')[0]
-        }), theaters
-        ))
+        for t in theaters:
+            try: cur.execute(sql, t)
+            except Exception as err:
+                pass
+                #print(err)
         conn.commit()
         conn.close()
 
@@ -52,8 +49,9 @@ class DB:
         conn.close()
 
     def getSeat(self):
+        import math
         conn, cur = self.open()
-        sql = "select s.x, s.y, (s.reservedTime-t.reservedTime) / (julianday('now')-t.reservedTime) * 100 from timetable as t, seat as s where s.timetableId = t.id and s.timetableId = 120;"
+        sql = "select s.x, s.y, (s.reservedTime-t.reservedTime) / (julianday('now')-t.reservedTime) * 10 from timetable as t, seat as s where s.timetableId = t.id and t.type=2 and t.cinemacode = 1001;"
         cur.execute(sql)
         result = cur.fetchall()
         conn.close()

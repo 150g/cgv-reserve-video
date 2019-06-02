@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-# need to make interval
-# if you just dismiss it, your ip will be banned
 import re
 import db
 import sys
@@ -9,7 +7,6 @@ import json
 import scrapy
 from scrapy.crawler import CrawlerProcess
 
-# get from server, set to db
 class MegaboxSpider(scrapy.Spider):
     type         = 1
     name         = 'megaboxspider'
@@ -20,13 +17,14 @@ class MegaboxSpider(scrapy.Spider):
     def start_requests(self):
         self.db = db.DB(self.type)
 
-        #"""## write Theater to DB
-        if sys.argv[1] == '0':
-            yield scrapy.Request(url=self.theaterUrl, callback=self.setTheater)
-        #"""##
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-t', '--type')
+        args = parser.parse_args()
 
-        #"""## write Timetable to DB
-        elif sys.argv[1] == '1':
+        #"""## write Theater to DB
+        if args.type == '0':
+            yield scrapy.Request(url=self.theaterUrl, callback=self.setTheater)
             theaters = self.db.getTheater()
             for t in theaters:
                 yield scrapy.Request(
@@ -36,7 +34,7 @@ class MegaboxSpider(scrapy.Spider):
         #"""##
 
         #"""## write Seats to DB
-        elif sys.argv[1] == '2':
+        elif args.type == '1':
             timetables = self.db.getTimetable()
             formdata = {
                 '_command': 'Booking.getBookingSeatInfo',
@@ -58,7 +56,7 @@ class MegaboxSpider(scrapy.Spider):
         #"""##
 
         #"""## draw seat from DB
-        elif sys.argv[1] == '3':
+        elif args.type == '2':
             import numpy as np
             import matplotlib.pyplot as plt
             from mpl_toolkits.mplot3d import Axes3D
@@ -70,14 +68,20 @@ class MegaboxSpider(scrapy.Spider):
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
 
-            ax.plot_trisurf(x, y, z)
+            ax.scatter(x, y, z)
             ax.set_xlabel('X Label')
             ax.set_ylabel('Y Label')
             ax.set_zlabel('Z Label')
+            ax.set_zlim(0, 50)
             plt.show()
 
     def setTheater(self, response):
         theaters = response.css('.wrap a')
+        theaters = list(map(
+        lambda t: {
+            'name': t.css('::text').get(),
+            'code': re.findall( r"cinema=(.*)'", t.attrib['onclick'] )[0]
+        }, theaters))
         self.db.setTheater(theaters)
 
     def setTimetable(self, response):
